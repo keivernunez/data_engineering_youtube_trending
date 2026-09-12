@@ -52,8 +52,8 @@ data/*.json
 data/*.parquet
 
 # Archivos personales / no para el repo público
-data_science_ideas.md
-linkedin_post.md
+"data_science_ideas.md"
+"linkedin_post.md"
 
 # Imágenes de trabajo
 
