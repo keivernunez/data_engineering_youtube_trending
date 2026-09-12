@@ -67,7 +67,7 @@ Datos de YouTube frescos cada 6 horas, en **Parquet comprimido con Snappy**, con
 
 ---
 
-🔗 Código completo disponible en GitHub: **github.com/tu-usuario/data-engeneering-aws-pipeline**
+🔗 Código completo disponible en GitHub: **github.com/tu-usuario/data-engineering-youtube-trending**
 
 ---
 
@@ -133,7 +133,7 @@ El Glue Job detecta si viene de la API de YouTube (columnas como `snippet.title`
 `engagement_rate = (likes + dislikes + comments) / views * 100`
 Calculado en Silver para que Gold pueda agregar directamente sin recalcular.
 
-🔗 github.com/tu-usuario/data-engeneering-aws-pipeline
+🔗 github.com/tu-usuario/data-engineering-youtube-trending
 
 **#DataEngineering #AWS #PySpark #Glue #StepFunctions #DataQuality #Python**
 

@@ -1,0 +1,66 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Environment / secrets — NUNCA subir al repo
+.env
+.env.*
+*.env
+secrets.json
+credentials.json
+config.local.*
+
+# AWS credentials
+.aws/
+aws_credentials
+*.pem
+*.key
+
+# IDE / editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# Logs
+*.log
+logs/
+
+# Data files (grandes, no versionar)
+data/*.csv
+data/*.json
+data/*.parquet
+
+# Archivos personales / no para el repo público
+data_science_ideas.md
+linkedin_post.md
+
+# Imágenes de trabajo
+"YouTube Trending Data Pipeline.png"
+architecture_v2.jpg
+
+# Terraform state (si se añade IaC en el futuro)
+*.tfstate
+*.tfstate.*
+.terraform/
+
