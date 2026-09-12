@@ -1,0 +1,762 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>YouTube Trending Pipeline — Architecture</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #0d1117;
+      font-family: 'Segoe UI', Arial, sans-serif;
+      color: #e6edf3;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    header {
+      width: 100%;
+      background: #161b22;
+      border-bottom: 1px solid #30363d;
+      padding: 16px 36px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .logo  { font-size: 20px; font-weight: 700; color: #ff9900; }
+    .sub   { font-size: 12px; color: #8b949e; }
+    .badge {
+      margin-left: auto;
+      background: #21262d;
+      border: 1px solid #30363d;
+      border-radius: 20px;
+      padding: 4px 12px;
+      font-size: 11px;
+      color: #58a6ff;
+    }
+
+    .wrap { width: 100%; max-width: 1480px; padding: 20px 12px 12px; }
+
+    svg { width: 100%; height: auto; overflow: visible; }
+
+    .tooltip {
+      position: fixed;
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      padding: 12px 16px;
+      font-size: 12px;
+      color: #e6edf3;
+      max-width: 290px;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.12s;
+      z-index: 100;
+      line-height: 1.6;
+      box-shadow: 0 8px 28px rgba(0,0,0,0.7);
+    }
+    .tooltip.on { opacity: 1; }
+    .tt-title   { font-weight: 700; color: #ff9900; margin-bottom: 4px; font-size: 13px; }
+    .tt-svc     { font-size: 10px; color: #58a6ff; margin-bottom: 6px; }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 18px;
+      padding: 10px 14px;
+      font-size: 11px;
+      color: #8b949e;
+    }
+    .li { display: flex; align-items: center; gap: 6px; }
+    .ld { width: 10px; height: 10px; border-radius: 3px; }
+
+    footer {
+      margin-top: 10px;
+      padding: 12px;
+      font-size: 10px;
+      color: #484f58;
+      text-align: center;
+    }
+
+    .nd { cursor: pointer; }
+    .nd:hover .box { filter: brightness(1.3); }
+
+    @keyframes dash { to { stroke-dashoffset: -20; } }
+    .fa { animation: dash 1.4s linear infinite; stroke-dasharray: 6 4; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div>
+    <div class="logo">☁️ YouTube Trending Pipeline</div>
+    <div class="sub">AWS Serverless · Medallion Architecture (Bronze → Silver → Gold)</div>
+  </div>
+  <div class="badge">v1.0 · us-east-1</div>
+</header>
+
+<div class="wrap">
+<svg viewBox="0 0 1380 820" xmlns="http://www.w3.org/2000/svg">
+<defs>
+  <linearGradient id="gbg"  x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0%"   stop-color="#161b22"/>
+    <stop offset="100%" stop-color="#0d1117"/>
+  </linearGradient>
+  <linearGradient id="gsf"  x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0%"   stop-color="#1a0d1a"/>
+    <stop offset="100%" stop-color="#120a12"/>
+  </linearGradient>
+  <linearGradient id="gnd"  x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0%"   stop-color="#21262d"/>
+    <stop offset="100%" stop-color="#1c2128"/>
+  </linearGradient>
+  <linearGradient id="gbr"  x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0%"   stop-color="#2d1500"/>
+    <stop offset="100%" stop-color="#3d1e00"/>
+  </linearGradient>
+  <linearGradient id="gsi"  x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0%"   stop-color="#1a2030"/>
+    <stop offset="100%" stop-color="#1e2535"/>
+  </linearGradient>
+  <linearGradient id="ggo"  x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0%"   stop-color="#1e1600"/>
+    <stop offset="100%" stop-color="#2a1e00"/>
+  </linearGradient>
+  <linearGradient id="gat"  x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0%"   stop-color="#0f1c2e"/>
+    <stop offset="100%" stop-color="#0a1520"/>
+  </linearGradient>
+
+  <!-- Arrow markers (unique IDs, no duplicates) -->
+  <marker id="ao" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+    <polygon points="0 0,8 3,0 6" fill="#ff9900"/>
+  </marker>
+  <marker id="ab" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+    <polygon points="0 0,8 3,0 6" fill="#4c9be8"/>
+  </marker>
+  <marker id="ag" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+    <polygon points="0 0,8 3,0 6" fill="#4ade80"/>
+  </marker>
+  <marker id="ay" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+    <polygon points="0 0,8 3,0 6" fill="#fbbf24"/>
+  </marker>
+  <marker id="ap" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+    <polygon points="0 0,8 3,0 6" fill="#e91e8c"/>
+  </marker>
+  <marker id="av" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+    <polygon points="0 0,8 3,0 6" fill="#a78bfa"/>
+  </marker>
+  <marker id="ar" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+    <polygon points="0 0,8 3,0 6" fill="#ef4444"/>
+  </marker>
+
+  <filter id="sh">
+    <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#000" flood-opacity="0.5"/>
+  </filter>
+</defs>
+
+<!-- ── BACKGROUND ── -->
+<rect width="1380" height="820" fill="url(#gbg)" rx="10"/>
+<g stroke="#1c2128" stroke-width="0.5" opacity="0.5">
+  <line x1="0" y1="160" x2="1380" y2="160"/>
+  <line x1="0" y1="320" x2="1380" y2="320"/>
+  <line x1="0" y1="480" x2="1380" y2="480"/>
+  <line x1="0" y1="640" x2="1380" y2="640"/>
+</g>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     STEP FUNCTIONS BANNER — full-width orchestrator at top
+═══════════════════════════════════════════════════════════════ -->
+<g class="nd"
+   data-title="AWS Step Functions — Pipeline Orchestrator"
+   data-svc="State Machine · step_functions/pipeline_orchestration.json"
+   data-desc="Orquesta TODO el pipeline de extremo a extremo con 7 estados: IngestFromYouTubeAPI → WaitForS3Consistency → ProcessInParallel (2 ramas en paralelo) → RunDataQualityChecks → EvaluateDataQuality → RunSilverToGoldGlueJob → NotifySuccess. Cada estado tiene retry logic con backoff exponencial y error handlers que publican en SNS. El JSON de la State Machine está en step_functions/pipeline_orchestration.json.">
+  <rect class="box" x="8" y="8" width="1364" height="54" rx="8"
+        fill="url(#gsf)" stroke="#e91e8c" stroke-width="1.5" stroke-dasharray="6 3" filter="url(#sh)"/>
+  <rect x="16" y="15" width="36" height="36" rx="6" fill="#e91e8c" opacity="0.9"/>
+  <text x="34" y="39" text-anchor="middle" font-size="20" fill="white">⬡</text>
+  <text x="60" y="31" font-size="13" font-weight="700" fill="#f9a8d4">AWS Step Functions — Pipeline Orchestrator</text>
+  <text x="60" y="47" font-size="10" fill="#9d4edd">7 estados · Retry logic · Parallel branches · Error handling · SNS alerts en cada fallo</text>
+  <text x="1362" y="26" text-anchor="end" font-size="9" fill="#6b21a8">▸ orquesta todo el flujo ↓</text>
+</g>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     COLUMN 1 — SOURCES (x 10–170)
+═══════════════════════════════════════════════════════════════ -->
+
+<!-- EventBridge -->
+<g class="nd"
+   data-title="Amazon EventBridge Scheduler"
+   data-svc="⚠ Infraestructura externa — NO está en el código del repo"
+   data-desc="EventBridge NO está implementado en ningún archivo de código del repositorio. Es infraestructura configurada externamente en la consola AWS o via CLI: 'aws events put-rule --schedule-expression cron(0 */6 * * ? *)'. Dispara el Step Functions State Machine cada 6 horas. El pipeline también puede ejecutarse manualmente desde la consola de Step Functions o invocando la Lambda directamente.">
+  <rect class="box" x="10" y="82" width="158" height="85" rx="7"
+        fill="url(#gnd)" stroke="#e91e8c" stroke-width="1.5" filter="url(#sh)"/>
+  <rect x="18" y="92" width="30" height="30" rx="5" fill="#e91e8c" opacity="0.85"/>
+  <text x="33" y="113" text-anchor="middle" font-size="17" fill="white">⚡</text>
+  <text x="58" y="106" font-size="11" font-weight="700" fill="#e6edf3">EventBridge</text>
+  <text x="58" y="119" font-size="10" fill="#8b949e">Scheduler</text>
+  <text x="89" y="135" text-anchor="middle" font-size="8" fill="#e91e8c">cron(0 */6 * * ? *)</text>
+  <text x="89" y="147" text-anchor="middle" font-size="8" fill="#f87171">⚠ config. externa</text>
+  <text x="89" y="158" text-anchor="middle" font-size="7" fill="#4b5563">no implementado en repo</text>
+</g>
+
+<!-- YouTube API -->
+<g class="nd"
+   data-title="YouTube Data API v3"
+   data-svc="Google API — Fuente externa de datos"
+   data-desc="Fuente de datos del pipeline. La Lambda de ingesta llama a 2 endpoints: (1) GET /videos?chart=mostPopular&amp;part=snippet,statistics,contentDetails&amp;maxResults=50 — trending videos. (2) GET /videoCategories?part=snippet — mapping category_id→name. Se consultan 10 regiones: US, GB, CA, DE, FR, IN, JP, KR, MX, RU. La API key se guarda en la variable de entorno YOUTUBE_API_KEY de la Lambda.">
+  <rect class="box" x="10" y="195" width="158" height="100" rx="7"
+        fill="url(#gnd)" stroke="#ef4444" stroke-width="1.5" filter="url(#sh)"/>
+  <rect x="18" y="205" width="30" height="30" rx="5" fill="#ef4444" opacity="0.85"/>
+  <text x="33" y="226" text-anchor="middle" font-size="17" fill="white">▶</text>
+  <text x="58" y="220" font-size="11" font-weight="700" fill="#e6edf3">YouTube</text>
+  <text x="58" y="233" font-size="10" fill="#8b949e">Data API v3</text>
+  <text x="89" y="251" text-anchor="middle" font-size="8" fill="#fca5a5">US · GB · CA · DE · FR</text>
+  <text x="89" y="263" text-anchor="middle" font-size="8" fill="#fca5a5">IN · JP · KR · MX · RU</text>
+  <text x="89" y="278" text-anchor="middle" font-size="8" fill="#6b7280">50 videos/región</text>
+</g>
+
+<!-- IAM -->
+<g class="nd"
+   data-title="AWS IAM — Mínimo Privilegio"
+   data-svc="iam_permissions/ — 3 políticas"
+   data-desc="3 políticas IAM de mínimo privilegio en iam_permissions/: (1) Lambda: S3 read/write en bronze/silver + Glue catalog + SNS publish + Athena. (2) Glue: S3 read/write en todos los buckets + Glue catalog. (3) Step Functions: Lambda:InvokeFunction + Glue:StartJobRun + SNS:Publish — solo los ARNs del pipeline. Sin wildcards innecesarios.">
+  <rect class="box" x="10" y="530" width="158" height="78" rx="7"
+        fill="url(#gnd)" stroke="#ef4444" stroke-width="1.5" filter="url(#sh)"/>
+  <rect x="18" y="540" width="30" height="30" rx="5" fill="#ef4444" opacity="0.85"/>
+  <text x="33" y="561" text-anchor="middle" font-size="17" fill="white">🔒</text>
+  <text x="58" y="556" font-size="11" font-weight="700" fill="#e6edf3">AWS IAM</text>
+  <text x="58" y="569" font-size="10" fill="#8b949e">Least Privilege</text>
+  <text x="89" y="585" text-anchor="middle" font-size="9" fill="#ef4444">3 políticas</text>
+  <text x="89" y="597" text-anchor="middle" font-size="9" fill="#6b7280">Lambda · Glue · SF</text>
+</g>
+
+<!-- SNS -->
+<g class="nd"
+   data-title="Amazon SNS — Alertas del Pipeline"
+   data-svc="Simple Notification Service"
+   data-desc="Topic: yt-data-pipeline-alerts-dev. Step Functions publica en 4 eventos: (1) Pipeline exitoso. (2) Falla en ingesta. (3) Falla en transformación paralela. (4) Falla en Data Quality. Las Lambdas también publican alertas parciales (p.ej. si alguna región de la API falla). Variable de entorno SNS_ALERT_TOPIC_ARN en todas las funciones.">
+  <rect class="box" x="10" y="640" width="158" height="78" rx="7"
+        fill="url(#gnd)" stroke="#ec4899" stroke-width="1.5" filter="url(#sh)"/>
+  <rect x="18" y="650" width="30" height="30" rx="5" fill="#ec4899" opacity="0.85"/>
+  <text x="33" y="671" text-anchor="middle" font-size="17" fill="white">🔔</text>
+  <text x="58" y="666" font-size="11" font-weight="700" fill="#e6edf3">Amazon SNS</text>
+  <text x="58" y="679" font-size="10" fill="#8b949e">Alerts</text>
+  <text x="89" y="695" text-anchor="middle" font-size="9" fill="#ec4899">4 estados de alerta</text>
+  <text x="89" y="707" text-anchor="middle" font-size="9" fill="#6b7280">Success + Failures</text>
+</g>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     COLUMN 2 — LAMBDA INGESTION (x 188–358)
+═══════════════════════════════════════════════════════════════ -->
+<g class="nd"
+   data-title="Lambda: YouTube Ingestion"
+   data-svc="AWS Lambda (Python) · lambda/youtube_ingestion/lambda_function.py"
+   data-desc="Primer estado del pipeline (invocado por Step Functions). Para cada una de las 10 regiones: llama a /videos (trending) y /videoCategories, añade _pipeline_metadata (id, timestamp, video_count) y escribe JSON en S3 Bronze con particionado Hive: youtube/raw_statistics/region={r}/date={d}/hour={h}/{ts}.json y youtube/raw_statistics_reference_data/region={r}/date={d}/{r}_category_id.json. Si alguna región falla, continúa con las demás y notifica SNS al final.">
+  <rect class="box" x="188" y="155" width="165" height="92" rx="7"
+        fill="url(#gnd)" stroke="#ff9900" stroke-width="1.5" filter="url(#sh)"/>
+  <rect x="197" y="165" width="32" height="32" rx="5" fill="#ff9900" opacity="0.9"/>
+  <text x="213" y="187" text-anchor="middle" font-size="18" fill="white">λ</text>
+  <text x="245" y="181" font-size="11" font-weight="700" fill="#e6edf3">Lambda</text>
+  <text x="245" y="194" font-size="10" fill="#8b949e">YouTube Ingestion</text>
+  <text x="271" y="212" text-anchor="middle" font-size="8" fill="#ff9900">10 regiones · JSON raw</text>
+  <text x="271" y="224" text-anchor="middle" font-size="8" fill="#6b7280">Hive partitioning</text>
+  <text x="271" y="236" text-anchor="middle" font-size="7" fill="#4b5563">youtube_ingestion/</text>
+  <text x="271" y="246" text-anchor="middle" font-size="7" fill="#4b5563">lambda_function.py</text>
+</g>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     BRONZE PANEL (x 375–560)
+═══════════════════════════════════════════════════════════════ -->
+<rect x="375" y="70" width="185" height="560" rx="9"
+      fill="url(#gbr)" stroke="#b45309" stroke-width="1.5" opacity="0.9"/>
+<text x="468" y="91" text-anchor="middle" font-size="12" font-weight="700" fill="#f59e0b" letter-spacing="2">BRONZE</text>
+<text x="468" y="104" text-anchor="middle" font-size="8" fill="#92400e">Datos crudos (JSON)</text>
+
+<!-- S3 Bronze -->
+<g class="nd"
+   data-title="S3 Bronze — yt-data-pl-bronze"
+   data-svc="Amazon S3 · Raw JSON data lake"
+   data-desc="Almacena datos exactamente como llegan de la API. Estructura Hive-style: youtube/raw_statistics/region={r}/date={YYYY-MM-DD}/hour={HH}/{timestamp}.json (trending videos) y youtube/raw_statistics_reference_data/region={r}/date={d}/{r}_category_id.json (categorías). Cada archivo incluye el bloque _pipeline_metadata. Permite reruns completos del pipeline sin pérdida de datos.">
+  <rect class="box" x="387" y="118" width="160" height="72" rx="6"
+        fill="#1a0e00" stroke="#b45309" stroke-width="1.2" filter="url(#sh)"/>
+  <text x="467" y="141" text-anchor="middle" font-size="20">🪣</text>
+  <text x="467" y="159" text-anchor="middle" font-size="9" font-weight="700" fill="#f59e0b">yt-data-pl-bronze</text>
+  <text x="467" y="171" text-anchor="middle" font-size="8" fill="#8b949e">JSON · Hive partitions</text>
+  <text x="467" y="182" text-anchor="middle" font-size="8" fill="#d97706">region / date / hour</text>
+</g>
+
+<!-- Glue Catalog Bronze -->
+<g class="nd"
+   data-title="Glue Data Catalog — Bronze"
+   data-svc="Glue Crawler + Glue Catalog · yt-pipeline-bronze-dev"
+   data-desc="Glue Crawler escanea el bucket Bronze, infiere el schema de los JSON y registra las tablas en el Glue Catalog (base: yt-pipeline-bronze-dev, tabla: raw_statistics). Permite a los Glue Jobs leer con push_down_predicate por región, haciendo partition pruning y evitando escanear datos innecesarios.">
+  <rect class="box" x="387" y="210" width="160" height="62" rx="6"
+        fill="#1a0e00" stroke="#92400e" stroke-width="1"/>
+  <text x="467" y="231" text-anchor="middle" font-size="12">🗂</text>
+  <text x="467" y="247" text-anchor="middle" font-size="9" font-weight="700" fill="#f59e0b">Glue Data Catalog</text>
+  <text x="467" y="261" text-anchor="middle" font-size="8" fill="#6b7280">yt-pipeline-bronze-dev</text>
+  <text x="467" y="271" text-anchor="middle" font-size="8" fill="#4a2000">raw_statistics</text>
+</g>
+
+<!-- File structure detail -->
+<rect x="387" y="292" width="160" height="100" rx="5" fill="#110900" stroke="#4a2000" stroke-width="0.8"/>
+<text x="467" y="309" text-anchor="middle" font-size="8" font-weight="700" fill="#d97706">Estructura de archivos</text>
+<text x="392" y="323" font-size="7" fill="#6b7280">raw_statistics/</text>
+<text x="396" y="335" font-size="7" fill="#6b7280">region=US/date=2026-09-12/</text>
+<text x="400" y="347" font-size="7" fill="#6b7280">hour=14/</text>
+<text x="404" y="359" font-size="7" fill="#92400e">20260912_140000.json</text>
+<text x="392" y="373" font-size="7" fill="#4a2000">raw_statistics_reference_data/</text>
+<text x="396" y="385" font-size="7" fill="#4a2000">region=US/ US_category_id.json</text>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     TRANSFORM ZONE 1 — Between Bronze and Silver (x 562–718)
+     Two parallel branches: Lambda JSON→Parquet + Glue Bronze→Silver
+═══════════════════════════════════════════════════════════════ -->
+
+<!-- Parallel zone bracket -->
+<rect x="562" y="100" width="154" height="270" rx="6"
+      fill="none" stroke="#4c9be8" stroke-width="1" stroke-dasharray="4 3" opacity="0.45"/>
+<text x="639" y="115" text-anchor="middle" font-size="8" fill="#4c9be8">║ Paralelo (Step Functions)</text>
+
+<!-- Lambda JSON→Parquet (upper branch) -->
+<g class="nd"
+   data-title="Lambda: JSON → Parquet (reference data)"
+   data-svc="AWS Lambda + awswrangler · lambda/json_to_parquet/lambda_function.py"
+   data-desc="Rama paralela A. Lee JSON de categorías desde Bronze con boto3 (evita problemas de tipos mixtos de pandas). Aplana el array 'items' con pd.json_normalize(). Valida columnas (id, snippet.title). Deduplica por id. Escribe Parquet en Silver via awswrangler.s3.to_parquet(mode='overwrite_partitions') — idempotente. Actualiza el Glue Catalog automáticamente (schema_evolution=True).">
+  <rect class="box" x="562" y="122" width="154" height="90" rx="7"
+        fill="url(#gnd)" stroke="#ff9900" stroke-width="1.5" filter="url(#sh)"/>
+  <rect x="571" y="132" width="28" height="28" rx="5" fill="#ff9900" opacity="0.9"/>
+  <text x="585" y="151" text-anchor="middle" font-size="16" fill="white">λ</text>
+  <text x="614" y="148" font-size="10" font-weight="700" fill="#e6edf3">Lambda</text>
+  <text x="614" y="161" font-size="9" fill="#8b949e">JSON → Parquet</text>
+  <text x="639" y="178" text-anchor="middle" font-size="8" fill="#ff9900">awswrangler · pandas</text>
+  <text x="639" y="190" text-anchor="middle" font-size="8" fill="#6b7280">Reference data</text>
+  <text x="639" y="202" text-anchor="middle" font-size="7" fill="#4b5563">json_to_parquet/</text>
+  <text x="639" y="212" text-anchor="middle" font-size="7" fill="#4b5563">lambda_function.py</text>
+</g>
+
+<!-- Glue Job Bronze→Silver (lower branch) -->
+<g class="nd"
+   data-title="Glue Job: Bronze → Silver (statistics)"
+   data-svc="AWS Glue + PySpark · glue_jobs/bronze_to_silver_statistics.py"
+   data-desc="Rama paralela B. ETL completo en PySpark: (1) Lee desde Glue Catalog con push_down_predicate por región. (2) Schema enforcement: detecta automáticamente formato API JSON vs CSV Kaggle legacy. (3) Cleansing: filtra nulos, normaliza región, parsea trending_date en 2 formatos. (4) Feature engineering: like_ratio y engagement_rate. (5) Deduplicación con Window ROW_NUMBER() por (video_id, region, date). (6) DQ checks inline. (7) Escribe Parquet Snappy particionado por [region, trending_date_parsed].">
+  <rect class="box" x="562" y="240" width="154" height="90" rx="7"
+        fill="url(#gnd)" stroke="#4c9be8" stroke-width="1.5" filter="url(#sh)"/>
+  <rect x="571" y="250" width="28" height="28" rx="5" fill="#4c9be8" opacity="0.9"/>
+  <text x="585" y="269" text-anchor="middle" font-size="14" fill="white">⚙</text>
+  <text x="614" y="266" font-size="10" font-weight="700" fill="#e6edf3">Glue Job</text>
+  <text x="614" y="279" font-size="9" fill="#8b949e">Bronze → Silver</text>
+  <text x="639" y="296" text-anchor="middle" font-size="8" fill="#4c9be8">PySpark · Snappy</text>
+  <text x="639" y="308" text-anchor="middle" font-size="8" fill="#6b7280">Dedup · Schema enforce</text>
+  <text x="639" y="320" text-anchor="middle" font-size="7" fill="#4b5563">bronze_to_silver_statistics.py</text>
+  <text x="639" y="330" text-anchor="middle" font-size="7" fill="#4b5563">engagement_rate · like_ratio</text>
+</g>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     SILVER PANEL (x 720–918)
+═══════════════════════════════════════════════════════════════ -->
+<rect x="720" y="70" width="198" height="560" rx="9"
+      fill="url(#gsi)" stroke="#6b7280" stroke-width="1.5" opacity="0.9"/>
+<text x="819" y="91" text-anchor="middle" font-size="12" font-weight="700" fill="#d1d5db" letter-spacing="2">SILVER</text>
+<text x="819" y="104" text-anchor="middle" font-size="8" fill="#4b5563">Datos limpios (Parquet)</text>
+
+<!-- S3 Silver -->
+<g class="nd"
+   data-title="S3 Silver — yt-data-pl-silver"
+   data-svc="Amazon S3 · Cleansed Parquet data"
+   data-desc="Bucket Silver: datos limpios en Parquet Snappy. Dos paths: (1) youtube/statistics/ — videos con schema normalizado, like_ratio, engagement_rate. Particionado por [region, trending_date_parsed]. (2) youtube/reference_data/ — categorías limpias por región.">
+  <rect class="box" x="731" y="118" width="174" height="68" rx="6"
+        fill="#141c28" stroke="#6b7280" stroke-width="1.2" filter="url(#sh)"/>
+  <text x="818" y="140" text-anchor="middle" font-size="20">🪣</text>
+  <text x="818" y="158" text-anchor="middle" font-size="9" font-weight="700" fill="#d1d5db">yt-data-pl-silver</text>
+  <text x="818" y="170" text-anchor="middle" font-size="8" fill="#8b949e">Parquet · Snappy</text>
+  <text x="818" y="181" text-anchor="middle" font-size="8" fill="#4b5563">region / date partitions</text>
+</g>
+
+<!-- clean_statistics -->
+<g class="nd"
+   data-title="Silver: clean_statistics"
+   data-svc="Parquet table · yt-pipeline-silver-dev"
+   data-desc="Tabla principal Silver. Columnas: video_id, trending_date, title, channel_title, category_id, views, likes, dislikes, comment_count, like_ratio (%), engagement_rate (%), region, thumbnail_link, description, _processed_at, _job_name. Deduplicada por (video_id, region, trending_date_parsed) con ROW_NUMBER() window function.">
+  <rect class="box" x="731" y="208" width="174" height="60" rx="5"
+        fill="#141c28" stroke="#4b5563" stroke-width="1"/>
+  <text x="741" y="225" font-size="9">📋</text>
+  <text x="756" y="225" font-size="9" font-weight="700" fill="#d1d5db">clean_statistics</text>
+  <text x="818" y="240" text-anchor="middle" font-size="7" fill="#6b7280">video_id · views · likes</text>
+  <text x="818" y="251" text-anchor="middle" font-size="7" fill="#6b7280">like_ratio · engagement_rate</text>
+  <text x="818" y="262" text-anchor="middle" font-size="7" fill="#4b5563">partition: region + date</text>
+</g>
+
+<!-- clean_reference_data -->
+<g class="nd"
+   data-title="Silver: clean_reference_data"
+   data-svc="Parquet table · yt-pipeline-silver-dev"
+   data-desc="Tabla de referencia. Mapping category_id → category_name por región. Generada por Lambda json_to_parquet. Columnas: id, snippet.title (category name), region, _ingestion_timestamp. Particionada por región. Usada en el JOIN del Glue Job Silver→Gold para enriquecer con category_name.">
+  <rect class="box" x="731" y="282" width="174" height="60" rx="5"
+        fill="#141c28" stroke="#4b5563" stroke-width="1"/>
+  <text x="741" y="299" font-size="9">📋</text>
+  <text x="756" y="299" font-size="9" font-weight="700" fill="#d1d5db">clean_reference_data</text>
+  <text x="818" y="314" text-anchor="middle" font-size="7" fill="#6b7280">category_id → category_name</text>
+  <text x="818" y="325" text-anchor="middle" font-size="7" fill="#6b7280">region partitioned</text>
+  <text x="818" y="336" text-anchor="middle" font-size="7" fill="#4b5563">overwrite_partitions</text>
+</g>
+
+<!-- Glue Catalog Silver -->
+<g class="nd"
+   data-title="Glue Data Catalog — Silver"
+   data-svc="Glue Catalog · yt-pipeline-silver-dev"
+   data-desc="Base de datos yt-pipeline-silver-dev. Metadatos de clean_statistics y clean_reference_data. Actualizado automáticamente por awswrangler (enableUpdateCatalog=True) y los Glue Jobs. Consultable desde Athena con SQL estándar sobre los Parquet de S3.">
+  <rect class="box" x="731" y="356" width="174" height="52" rx="5"
+        fill="#141c28" stroke="#4b5563" stroke-width="1"/>
+  <text x="818" y="374" text-anchor="middle" font-size="11">🗂</text>
+  <text x="818" y="388" text-anchor="middle" font-size="9" font-weight="700" fill="#9ca3af">Glue Data Catalog</text>
+  <text x="818" y="400" text-anchor="middle" font-size="8" fill="#4b5563">yt-pipeline-silver-dev</text>
+</g>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     TRANSFORM ZONE 2 — Between Silver and Gold (x 920–1075)
+     Lambda DQ Gate + Glue Silver→Gold
+═══════════════════════════════════════════════════════════════ -->
+
+<!-- Lambda DQ — Gate -->
+<g class="nd"
+   data-title="Lambda: Data Quality Checks (DQ Gate)"
+   data-svc="AWS Lambda + awswrangler + Athena · data_quality/data_quality_lambda.py"
+   data-desc="Gate obligatorio entre Silver y Gold. Ejecuta 5 validaciones sobre Silver via Athena (muestra de 10K filas): (1) row_count ≥ 10. (2) null% ≤ 5% en columnas críticas. (3) schema validation. (4) value_range (views negativos o &gt;50B). (5) freshness &lt;48h. Retorna {quality_passed: bool}. Si falla → Step Functions va a NotifyDQFailure y el Glue S→G NUNCA se ejecuta. Thresholds configurables via env vars.">
+  <rect class="box" x="920" y="122" width="150" height="92" rx="7"
+        fill="url(#gnd)" stroke="#4ade80" stroke-width="1.5" filter="url(#sh)"/>
+  <rect x="929" y="132" width="28" height="28" rx="5" fill="#166534" opacity="0.9"/>
+  <text x="943" y="151" text-anchor="middle" font-size="14" fill="#4ade80">✓</text>
+  <text x="970" y="148" font-size="10" font-weight="700" fill="#e6edf3">Lambda</text>
+  <text x="970" y="161" font-size="9" fill="#8b949e">Data Quality Gate</text>
+  <text x="995" y="178" text-anchor="middle" font-size="8" fill="#4ade80">5 checks · Athena query</text>
+  <text x="995" y="190" text-anchor="middle" font-size="8" fill="#6b7280">Bloquea Gold si falla</text>
+  <text x="995" y="202" text-anchor="middle" font-size="7" fill="#4b5563">data_quality_lambda.py</text>
+  <text x="995" y="212" text-anchor="middle" font-size="7" fill="#166534">quality_passed → bool</text>
+</g>
+
+<!-- DQ pass gate indicator -->
+<rect x="942" y="220" width="106" height="14" rx="3" fill="#166534" opacity="0.35"/>
+<text x="995" y="231" text-anchor="middle" font-size="8" fill="#4ade80">▸ if quality_passed == true</text>
+
+<!-- Glue Silver→Gold -->
+<g class="nd"
+   data-title="Glue Job: Silver → Gold (analytics)"
+   data-svc="AWS Glue + PySpark · glue_jobs/silver_to_gold_analytics.py"
+   data-desc="Genera 3 tablas Gold: (1) trending_analytics — KPIs diarios por región (groupBy region+date). (2) channel_analytics — ranking de canales con Window ROW_NUMBER() por total_views desc (rank_in_region, times_trending, peak_views). (3) category_analytics — cuota de views (view_share_pct via Window SUM) + avg_engagement. JOIN con clean_reference_data para enriquecer con category_name via broadcast join. Escribe Parquet Snappy y actualiza Glue Catalog Gold.">
+  <rect class="box" x="920" y="248" width="150" height="90" rx="7"
+        fill="url(#gnd)" stroke="#4c9be8" stroke-width="1.5" filter="url(#sh)"/>
+  <rect x="929" y="258" width="28" height="28" rx="5" fill="#4c9be8" opacity="0.9"/>
+  <text x="943" y="277" text-anchor="middle" font-size="14" fill="white">⚙</text>
+  <text x="970" y="274" font-size="10" font-weight="700" fill="#e6edf3">Glue Job</text>
+  <text x="970" y="287" font-size="9" fill="#8b949e">Silver → Gold</text>
+  <text x="995" y="304" text-anchor="middle" font-size="8" fill="#fbbf24">3 tablas analíticas</text>
+  <text x="995" y="316" text-anchor="middle" font-size="8" fill="#6b7280">Window fns · JOIN</text>
+  <text x="995" y="328" text-anchor="middle" font-size="7" fill="#4b5563">silver_to_gold_analytics.py</text>
+  <text x="995" y="338" text-anchor="middle" font-size="7" fill="#4b5563">view_share_pct · rank_in_region</text>
+</g>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     GOLD PANEL (x 1078–1300)
+═══════════════════════════════════════════════════════════════ -->
+<rect x="1078" y="70" width="222" height="560" rx="9"
+      fill="url(#ggo)" stroke="#d97706" stroke-width="1.5" opacity="0.9"/>
+<text x="1189" y="91" text-anchor="middle" font-size="12" font-weight="700" fill="#fbbf24" letter-spacing="2">GOLD</text>
+<text x="1189" y="104" text-anchor="middle" font-size="8" fill="#78350f">Tablas analíticas (Parquet)</text>
+
+<!-- S3 Gold -->
+<g class="nd"
+   data-title="S3 Gold — yt-data-pl-gold"
+   data-svc="Amazon S3 · Analytics-ready data"
+   data-desc="3 paths analíticos en Parquet Snappy: (1) youtube/trending_analytics/ (2) youtube/channel_analytics/ (3) youtube/category_analytics/. Todos consultables via Athena (SQL), visualizables en QuickSight, o ingestables en modelos ML/SageMaker.">
+  <rect class="box" x="1089" y="118" width="198" height="62" rx="6"
+        fill="#110d00" stroke="#d97706" stroke-width="1.2" filter="url(#sh)"/>
+  <text x="1188" y="139" text-anchor="middle" font-size="20">🪣</text>
+  <text x="1188" y="157" text-anchor="middle" font-size="9" font-weight="700" fill="#fbbf24">yt-data-pl-gold</text>
+  <text x="1188" y="170" text-anchor="middle" font-size="8" fill="#8b949e">Parquet · Snappy</text>
+</g>
+
+<!-- trending_analytics -->
+<g class="nd"
+   data-title="Gold: trending_analytics"
+   data-svc="Parquet table · yt-pipeline-gold-dev"
+   data-desc="KPIs diarios por región. Columnas: total_videos, total_views, total_likes, total_comments, avg_views_per_video, avg_like_ratio, avg_engagement_rate, max_views, unique_channels, unique_categories, _aggregated_at. Particionada por [region, trending_date_parsed]. Ideal para dashboards de tendencias temporales y series de tiempo (Prophet, ARIMA).">
+  <rect class="box" x="1089" y="198" width="198" height="60" rx="5"
+        fill="#110d00" stroke="#92400e" stroke-width="1"/>
+  <text x="1099" y="215" font-size="9">📈</text>
+  <text x="1113" y="215" font-size="9" font-weight="700" fill="#fbbf24">trending_analytics</text>
+  <text x="1188" y="231" text-anchor="middle" font-size="7" fill="#6b7280">KPIs diarios por región</text>
+  <text x="1188" y="242" text-anchor="middle" font-size="7" fill="#6b7280">avg_engagement · total_views</text>
+  <text x="1188" y="253" text-anchor="middle" font-size="7" fill="#78350f">partition: region · date</text>
+</g>
+
+<!-- channel_analytics -->
+<g class="nd"
+   data-title="Gold: channel_analytics"
+   data-svc="Parquet table · yt-pipeline-gold-dev"
+   data-desc="Rankings de canales por región. Columnas: channel_title, region, total_videos, total_views, avg_engagement_rate, peak_views, times_trending, first_trending, last_trending, categories (concat), rank_in_region (Window ROW_NUMBER por total_views desc), _aggregated_at. Particionada por región. Ideal para clustering de canales, identificar top creators.">
+  <rect class="box" x="1089" y="272" width="198" height="60" rx="5"
+        fill="#110d00" stroke="#92400e" stroke-width="1"/>
+  <text x="1099" y="289" font-size="9">🏆</text>
+  <text x="1113" y="289" font-size="9" font-weight="700" fill="#fbbf24">channel_analytics</text>
+  <text x="1188" y="305" text-anchor="middle" font-size="7" fill="#6b7280">rank_in_region · peak_views</text>
+  <text x="1188" y="316" text-anchor="middle" font-size="7" fill="#6b7280">times_trending · avg_engagement</text>
+  <text x="1188" y="327" text-anchor="middle" font-size="7" fill="#78350f">partition: region</text>
+</g>
+
+<!-- category_analytics -->
+<g class="nd"
+   data-title="Gold: category_analytics"
+   data-svc="Parquet table · yt-pipeline-gold-dev"
+   data-desc="Cuota de vistas por categoría. Columnas: category_name, category_id, region, trending_date_parsed, video_count, total_views, total_likes, avg_engagement_rate, unique_channels, view_share_pct (% del total diario via Window SUM), _aggregated_at. Particionada por [region, trending_date_parsed]. Ideal para análisis de popularidad de categorías por país.">
+  <rect class="box" x="1089" y="346" width="198" height="60" rx="5"
+        fill="#110d00" stroke="#92400e" stroke-width="1"/>
+  <text x="1099" y="363" font-size="9">🎯</text>
+  <text x="1113" y="363" font-size="9" font-weight="700" fill="#fbbf24">category_analytics</text>
+  <text x="1188" y="379" text-anchor="middle" font-size="7" fill="#6b7280">view_share_pct · avg_engagement</text>
+  <text x="1188" y="390" text-anchor="middle" font-size="7" fill="#6b7280">unique_channels por categoría</text>
+  <text x="1188" y="401" text-anchor="middle" font-size="7" fill="#78350f">partition: region · date</text>
+</g>
+
+<!-- Glue Catalog Gold -->
+<g class="nd"
+   data-title="Glue Data Catalog — Gold"
+   data-svc="Glue Catalog · yt-pipeline-gold-dev"
+   data-desc="Base de datos yt-pipeline-gold-dev con metadatos de las 3 tablas analíticas. Consultable desde Athena. También datasource para QuickSight (via Athena) y accesible desde SageMaker/notebooks via awswrangler.">
+  <rect class="box" x="1089" y="420" width="198" height="48" rx="5"
+        fill="#110d00" stroke="#92400e" stroke-width="1"/>
+  <text x="1188" y="438" text-anchor="middle" font-size="11">🗂</text>
+  <text x="1188" y="453" text-anchor="middle" font-size="9" font-weight="700" fill="#d97706">Glue Data Catalog</text>
+  <text x="1188" y="463" text-anchor="middle" font-size="7" fill="#78350f">yt-pipeline-gold-dev</text>
+</g>
+
+<!-- Consumption separator inside Gold -->
+<line x1="1093" y1="477" x2="1294" y2="477" stroke="#78350f" stroke-width="0.8" stroke-dasharray="4 3"/>
+<text x="1188" y="490" text-anchor="middle" font-size="8" font-weight="700" fill="#f59e0b">⚡ Explorar Gold con:</text>
+
+<!-- QuickSight -->
+<g class="nd"
+   data-title="Amazon QuickSight — BI &amp; Dashboards"
+   data-svc="Visualización recomendada para Gold"
+   data-desc="Se conecta a Athena como datasource SPICE. Permite crear dashboards de: trending temporal por región, ranking de canales (bar charts), heatmap de categorías, evolución de engagement. No requiere mover datos — Athena consulta los Parquet en S3 directamente. Ideal para stakeholders no técnicos.">
+  <rect class="box" x="1089" y="498" width="93" height="55" rx="5"
+        fill="#1a0e00" stroke="#f59e0b" stroke-width="1.2" filter="url(#sh)"/>
+  <text x="1135" y="518" text-anchor="middle" font-size="14">📊</text>
+  <text x="1135" y="534" text-anchor="middle" font-size="8" font-weight="700" fill="#fbbf24">QuickSight</text>
+  <text x="1135" y="545" text-anchor="middle" font-size="7" fill="#8b949e">BI · Dashboards</text>
+</g>
+
+<!-- ML / SageMaker -->
+<g class="nd"
+   data-title="ML / Amazon SageMaker"
+   data-svc="Machine Learning recomendado para Gold"
+   data-desc="La capa Gold es ideal como base para modelos ML: (1) Time Series Forecasting (Prophet/ARIMA) sobre trending_analytics. (2) Clustering de canales (KMeans) sobre channel_analytics. (3) Detección de anomalías (Isolation Forest). (4) Predicción de éxito temprano (GBM). SageMaker accede a Parquet via awswrangler+Athena sin mover datos. Ver data_science_ideas.md para detalles completos.">
+  <rect class="box" x="1192" y="498" width="95" height="55" rx="5"
+        fill="#1a0e00" stroke="#a78bfa" stroke-width="1.2" filter="url(#sh)"/>
+  <text x="1239" y="518" text-anchor="middle" font-size="14">🤖</text>
+  <text x="1239" y="534" text-anchor="middle" font-size="8" font-weight="700" fill="#a78bfa">ML / SageMaker</text>
+  <text x="1239" y="545" text-anchor="middle" font-size="7" fill="#8b949e">Modelos · Predicción</text>
+</g>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     ATHENA — BELOW Silver + Gold panels (Query Layer)
+═══════════════════════════════════════════════════════════════ -->
+<rect x="720" y="650" width="580" height="90" rx="8"
+      fill="url(#gat)" stroke="#7c3aed" stroke-width="1.5" filter="url(#sh)"/>
+<text x="1010" y="668" text-anchor="middle" font-size="10" font-weight="700" fill="#a78bfa">
+  Amazon Athena — SQL Query Layer
+</text>
+<text x="1010" y="681" text-anchor="middle" font-size="8" fill="#6b7280">
+  Recomendado para análisis ad-hoc sobre Silver y Gold · Pay per scan · ANSI SQL · Compatible JDBC (QuickSight, Tableau, Power BI)
+</text>
+
+<!-- Athena left block (Silver queries) -->
+<g class="nd"
+   data-title="Athena sobre Silver"
+   data-svc="Usado internamente por Lambda DQ + análisis ad-hoc"
+   data-desc="Sobre Silver: (1) Usado internamente por Lambda Data Quality via awswrangler.athena.read_sql_query() para los 5 checks de calidad. (2) Disponible para análisis ad-hoc sobre clean_statistics y clean_reference_data. Base de datos: yt-pipeline-silver-dev.">
+  <rect class="box" x="730" y="692" width="240" height="38" rx="5"
+        fill="#1e1040" stroke="#7c3aed" stroke-width="1"/>
+  <text x="745" y="707" font-size="11">🔍</text>
+  <text x="762" y="707" font-size="9" font-weight="700" fill="#a78bfa">Consultas Silver</text>
+  <text x="850" y="722" text-anchor="middle" font-size="7" fill="#6b7280">clean_statistics · clean_reference_data</text>
+  <text x="850" y="731" text-anchor="middle" font-size="7" fill="#4b5563">→ Lambda DQ + análisis ad-hoc</text>
+</g>
+
+<!-- Athena right block (Gold queries) -->
+<g class="nd"
+   data-title="Athena sobre Gold"
+   data-svc="Análisis ad-hoc + BI + ML inputs"
+   data-desc="Sobre Gold: consultas SQL estándar sobre trending_analytics, channel_analytics, category_analytics. Base de datos: yt-pipeline-gold-dev. Datasource de QuickSight. Input para notebooks ML (awswrangler.athena.read_sql_query en SageMaker). Compatible con cualquier herramienta JDBC.">
+  <rect class="box" x="984" y="692" width="306" height="38" rx="5"
+        fill="#1a1200" stroke="#92400e" stroke-width="1"/>
+  <text x="999" y="707" font-size="11">🔍</text>
+  <text x="1016" y="707" font-size="9" font-weight="700" fill="#fbbf24">Consultas Gold</text>
+  <text x="1137" y="722" text-anchor="middle" font-size="7" fill="#6b7280">trending_analytics · channel_analytics · category_analytics</text>
+  <text x="1137" y="731" text-anchor="middle" font-size="7" fill="#4b5563">→ ad-hoc, QuickSight, ML inputs</text>
+</g>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     FLOW ARROWS
+═══════════════════════════════════════════════════════════════ -->
+
+<!-- EventBridge → Step Functions banner -->
+<line x1="89" y1="82" x2="89" y2="64"
+      stroke="#e91e8c" stroke-width="1.5" marker-end="url(#ap)" class="fa"/>
+<text x="95" y="76" font-size="7" fill="#9d4edd">trigger</text>
+
+<!-- YouTube API → Lambda Ingestion -->
+<line x1="168" y1="215" x2="188" y2="205"
+      stroke="#ef4444" stroke-width="1.8" marker-end="url(#ao)" class="fa"/>
+
+<!-- Step Functions → Lambda Ingestion (orchestrate) -->
+<line x1="271" y1="62" x2="271" y2="155"
+      stroke="#e91e8c" stroke-width="1.2" marker-end="url(#ap)" stroke-dasharray="4 3"/>
+<text x="277" y="115" font-size="7" fill="#9d4edd">invoca</text>
+
+<!-- Lambda Ingestion → S3 Bronze -->
+<path d="M353,201 Q364,201 375,175"
+      stroke="#ff9900" stroke-width="2" fill="none" marker-end="url(#ao)" class="fa"/>
+<text x="358" y="193" font-size="7" fill="#ff9900">JSON →</text>
+
+<!-- Bronze → Lambda JSON→Parquet (read reference data) -->
+<path d="M560,200 Q561,180 562,170"
+      stroke="#b45309" stroke-width="1.4" fill="none" marker-end="url(#ao)"/>
+
+<!-- Bronze → Glue B→S (read statistics) -->
+<line x1="560" y1="268" x2="562" y2="275"
+      stroke="#b45309" stroke-width="1.8" marker-end="url(#ab)"/>
+
+<!-- Step Functions parallel → Lambda JSON→P (orchestrate) -->
+<path d="M640,62 L640,122"
+      stroke="#e91e8c" stroke-width="1" fill="none" marker-end="url(#ap)" stroke-dasharray="3 3"/>
+
+<!-- Step Functions parallel → Glue B→S (orchestrate) -->
+<path d="M640,62 L640,240"
+      stroke="#e91e8c" stroke-width="1" fill="none" stroke-dasharray="3 3"/>
+<circle cx="640" cy="200" r="3" fill="#e91e8c" opacity="0.5"/>
+
+<!-- Lambda JSON→Parquet → Silver (reference) -->
+<line x1="716" y1="167" x2="731" y2="300"
+      stroke="#ff9900" stroke-width="1.8" marker-end="url(#ao)" class="fa"/>
+
+<!-- Glue B→S → Silver (statistics) -->
+<line x1="716" y1="285" x2="731" y2="245"
+      stroke="#4c9be8" stroke-width="2" marker-end="url(#ab)" class="fa"/>
+<text x="718" y="265" font-size="7" fill="#4c9be8">Parquet →</text>
+
+<!-- Silver → Lambda DQ (reads for quality checks) -->
+<path d="M908,245 Q914,200 920,175"
+      stroke="#4ade80" stroke-width="1.4" fill="none" marker-end="url(#ag)" stroke-dasharray="4 3"/>
+<text x="910" y="213" font-size="7" fill="#4ade80">DQ</text>
+
+<!-- Lambda DQ → Glue S→G (after pass) -->
+<line x1="995" y1="234" x2="995" y2="248"
+      stroke="#4ade80" stroke-width="2" marker-end="url(#ag)" class="fa"/>
+
+<!-- Silver → Glue S→G (read data) -->
+<path d="M908,310 Q914,295 920,295"
+      stroke="#6b7280" stroke-width="1.4" fill="none" marker-end="url(#ab)"/>
+
+<!-- Glue S→G → Gold S3 -->
+<line x1="1070" y1="290" x2="1089" y2="275"
+      stroke="#fbbf24" stroke-width="2" marker-end="url(#ay)" class="fa"/>
+<text x="1072" y="283" font-size="7" fill="#fbbf24">Gold →</text>
+
+<!-- Step Functions → Lambda DQ (orchestrate) -->
+<path d="M995,62 L995,122"
+      stroke="#e91e8c" stroke-width="1" fill="none" marker-end="url(#ap)" stroke-dasharray="3 3"/>
+
+<!-- Step Functions → Glue S→G (orchestrate) -->
+<path d="M995,62 L995,248"
+      stroke="#e91e8c" stroke-width="1" fill="none" stroke-dasharray="3 3"/>
+<circle cx="995" cy="190" r="3" fill="#e91e8c" opacity="0.5"/>
+
+<!-- Athena ↔ Silver -->
+<path d="M818,420 Q818,580 818,650"
+      stroke="#7c3aed" stroke-width="1.2" fill="none" marker-end="url(#av)" stroke-dasharray="5 3"/>
+
+<!-- Athena ↔ Gold -->
+<path d="M1188,478 Q1188,560 1188,600 Q1188,635 1137,650"
+      stroke="#7c3aed" stroke-width="1.2" fill="none" marker-end="url(#av)" stroke-dasharray="5 3"/>
+
+<!-- SNS — Step Functions notifies -->
+<path d="M89,62 Q89,625 89,640"
+      stroke="#ec4899" stroke-width="1" fill="none" marker-end="url(#ap)" stroke-dasharray="3 3"/>
+<text x="95" y="600" font-size="7" fill="#ec4899">alertas</text>
+
+<!-- QuickSight/ML ← Athena/Gold -->
+<path d="M1135,650 Q1135,580 1135,553"
+      stroke="#f59e0b" stroke-width="1.2" fill="none" marker-end="url(#ay)" stroke-dasharray="4 3"/>
+<path d="M1239,650 Q1239,590 1239,553"
+      stroke="#a78bfa" stroke-width="1.2" fill="none" marker-end="url(#av)" stroke-dasharray="4 3"/>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     TITLE BAR
+═══════════════════════════════════════════════════════════════ -->
+<rect x="8" y="756" width="1364" height="36" rx="6"
+      fill="#161b22" stroke="#21262d" stroke-width="1" opacity="0.85"/>
+<text x="20" y="770" font-size="10" font-weight="700" fill="#ff9900">YouTube Trending Pipeline</text>
+<text x="175" y="770" font-size="9" fill="#8b949e"> · Serverless · Medallion Architecture · AWS · Automatizado cada 6 horas</text>
+<text x="20" y="783" font-size="8" fill="#484f58">3 Lambdas · 2 Glue Jobs (PySpark) · Step Functions · S3 · Athena · SNS · 10 regiones (US·GB·CA·DE·FR·IN·JP·KR·MX·RU)</text>
+<text x="1368" y="770" text-anchor="end" font-size="8" fill="#484f58">us-east-1</text>
+
+</svg>
+</div>
+
+<!-- Legend -->
+<div class="legend">
+  <div class="li"><div class="ld" style="background:#ff9900"></div>AWS Lambda</div>
+  <div class="li"><div class="ld" style="background:#4c9be8"></div>AWS Glue (PySpark)</div>
+  <div class="li"><div class="ld" style="background:#e91e8c"></div>Step Functions / EventBridge</div>
+  <div class="li"><div class="ld" style="background:#b45309"></div>Bronze (JSON raw)</div>
+  <div class="li"><div class="ld" style="background:#6b7280"></div>Silver (Parquet limpio)</div>
+  <div class="li"><div class="ld" style="background:#d97706"></div>Gold (Analytics)</div>
+  <div class="li"><div class="ld" style="background:#7c3aed"></div>Athena (SQL Query Layer)</div>
+  <div class="li"><div class="ld" style="background:#f59e0b"></div>QuickSight (BI)</div>
+  <div class="li"><div class="ld" style="background:#a78bfa"></div>ML / SageMaker</div>
+  <div class="li"><div class="ld" style="background:#ec4899"></div>SNS (Alertas)</div>
+</div>
+
+<footer>
+  💡 Hover sobre cualquier componente para ver detalles técnicos &nbsp;|&nbsp; data-engeneering-aws-pipeline
+  <br><small style="color:#30363d">⚠ EventBridge se configura externamente (consola AWS o CLI) — no está implementado en el código del repositorio</small>
+</footer>
+
+<!-- Tooltip -->
+<div class="tooltip" id="tt">
+  <div class="tt-title" id="tt-t"></div>
+  <div class="tt-svc"   id="tt-s"></div>
+  <div id="tt-d"></div>
+</div>
+
+<script>
+  const tt = document.getElementById('tt');
+  const ttt = document.getElementById('tt-t');
+  const tts = document.getElementById('tt-s');
+  const ttd = document.getElementById('tt-d');
+
+  document.querySelectorAll('.nd').forEach(n => {
+    n.addEventListener('mouseenter', () => {
+      ttt.textContent = n.dataset.title || '';
+      tts.textContent = n.dataset.svc   || '';
+      ttd.textContent = n.dataset.desc  || '';
+      tt.classList.add('on');
+    });
+    n.addEventListener('mousemove', e => {
+      let x = e.clientX + 18, y = e.clientY + 18;
+      if (x + 300 > window.innerWidth)  x = e.clientX - 310;
+      if (y + 200 > window.innerHeight) y = e.clientY - 205;
+      tt.style.left = x + 'px';
+      tt.style.top  = y + 'px';
+    });
+    n.addEventListener('mouseleave', () => tt.classList.remove('on'));
+  });
+</script>
+</body>
+</html>
+
