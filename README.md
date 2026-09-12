@@ -17,7 +17,7 @@
 
 ---
 
-## 📋 Descripción General
+## Descripción General
 
 Este proyecto implementa un **pipeline de Data Engineering end-to-end** completamente automatizado en AWS que:
 
@@ -33,11 +33,11 @@ El análisis de tendencias en YouTube es valioso para creadores de contenido, ma
 
 ---
 
-## 🏗️ Arquitectura
+## Arquitectura
 
 ![Diagrama de Arquitectura](./architecture.jpg)
 
-> 💡 Para una versión **interactiva** con tooltips y detalles de cada componente, abre [`architecture.html`](./architecture.html) en tu navegador.
+>  Para una versión **interactiva** con tooltips y detalles de cada componente, abre [`architecture.html`](./architecture.html) en tu navegador.
 
 ### Vista del Step Functions State Machine
 
@@ -45,7 +45,7 @@ El análisis de tendencias en YouTube es valioso para creadores de contenido, ma
 
 ---
 
-## ☁️ Servicios AWS Utilizados
+##  Servicios AWS Utilizados
 
 | Servicio | Rol en el Pipeline | Detalle |
 |---|---|---|
@@ -63,7 +63,7 @@ El análisis de tendencias en YouTube es valioso para creadores de contenido, ma
 
 ---
 
-## 🔄 Pipeline Walkthrough
+##  Pipeline Walkthrough
 
 El pipeline está orquestado completamente por **AWS Step Functions** y se compone de los siguientes estados:
 
@@ -146,7 +146,7 @@ En cualquier estado de falla o al finalizar exitosamente, Step Functions publica
 
 ---
 
-## 🥇 Capa Gold — Tablas Analíticas
+##  Capa Gold — Tablas Analíticas
 
 Las tablas Gold están en `s3://yt-data-pl-gold/youtube/` y son consultables vía **Amazon Athena** (base: `yt-pipeline-gold-dev`).
 
@@ -193,14 +193,14 @@ Particionada por `[region, trending_date_parsed]`.
 
 ---
 
-## 🗂️ Estructura del Proyecto
+##  Estructura del Proyecto
 
 ```
 youtube_trending_project/
 │
-├── 📄 architecture.html          # Diagrama interactivo (dark mode, AWS style)
-├── 🖼️ architecture.jpg           # Imagen estática del diagrama de arquitectura
-├── 🖼️ stepfunctions_graph.png    # Grafo visual del State Machine
+├──  architecture.html          # Diagrama interactivo (dark mode, AWS style)
+├──  architecture.jpg           # Imagen estática del diagrama de arquitectura
+├──  stepfunctions_graph.png    # Grafo visual del State Machine
 │
 ├── lambda/
 │   ├── youtube_ingestion/
@@ -234,7 +234,7 @@ youtube_trending_project/
 
 ---
 
-## 🚀 Getting Started
+##  Getting Started
 
 ### Pre-requisitos
 
@@ -334,7 +334,7 @@ aws events put-rule \
 
 ---
 
-## 🔒 Seguridad & IAM
+##  Seguridad & IAM
 
 El proyecto implementa el principio de **mínimo privilegio** con 3 políticas IAM:
 
@@ -348,7 +348,7 @@ Las políticas completas están en [`iam_permissions/`](./iam_permissions/).
 
 ---
 
-## 📡 Monitoreo & Alertas
+##  Monitoreo & Alertas
 
 El pipeline envía notificaciones SNS en los siguientes eventos:
 
@@ -364,7 +364,7 @@ Todos los logs están disponibles en **Amazon CloudWatch Logs** bajo los grupos 
 
 ---
 
-## 🧪 Calidad de Datos
+##  Calidad de Datos
 
 La arquitectura implementa **doble capa de validación**:
 
@@ -375,7 +375,7 @@ Esto garantiza que la capa Gold siempre contenga datos confiables.
 
 ---
 
-## 🔭 Posibles Mejoras
+##  Posibles Mejoras
 
 - [ ] Integración con **AWS Glue Data Quality** (DQDL) para reglas declarativas
 - [ ] Dashboard en **Amazon QuickSight** conectado a las tablas Gold via Athena
@@ -388,7 +388,7 @@ Esto garantiza que la capa Gold siempre contenga datos confiables.
 
 ---
 
-## 📄 Licencia
+##  Licencia
 
 Este proyecto es de código abierto bajo la licencia **MIT**. Ver [LICENSE](./LICENSE) para más detalles.
 
